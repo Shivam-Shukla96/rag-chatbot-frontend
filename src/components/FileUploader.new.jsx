@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef } from "react";
 import { chatService } from "../services/apiConfig";
 
 const MAX_FILES = 80;
@@ -6,7 +6,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
 const ALLOWED_TYPES = [".txt", ".pdf", ".doc", ".docx"];
 
 const FileUploader = () => {
-  const [files, setFiles] = useState([]); // Array of File objects
+  const [files, setFiles] = useState([]);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -14,89 +14,96 @@ const FileUploader = () => {
   const [overallProgress, setOverallProgress] = useState(0);
   const fileInputRef = useRef(null);
 
-  // Reset state when component unmounts
-  React.useEffect(() => {
-    return () => {
-      setFiles([]);
-      setStatus("");
-      setError(null);
-      setUploadProgress({});
-      setOverallProgress(0);
-    };
-  }, []);
+  const handleFileSelect = async (event) => {
+    if (!event.target.files || event.target.files.length === 0) {
+      setError("No files selected");
+      return;
+    }
 
-  const checkPDFContent = useCallback(async (file) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = function (event) {
-        const content = event.target.result;
-        // Check for common indicators of text-based PDFs
-        const hasTextMarkers =
-          content.includes("/Type /Font") ||
-          content.includes("/Subtype /Text") ||
-          content.includes("/Filter /FlateDecode") ||
-          content.includes("/ToUnicode");
-        resolve(hasTextMarkers);
-      };
-      reader.readAsBinaryString(file.slice(0, 5120)); // Read first 5KB for faster processing
-    });
-  }, []);
+    setStatus("Validating files...");
+    setError(null);
 
-  const validateFiles = useCallback(
-    async (fileList) => {
-      const errors = [];
-      const validFiles = [];
-
-      // Convert FileList to array and validate each file
-      for (const file of Array.from(fileList)) {
-        if (
-          !ALLOWED_TYPES.some((type) => file.name.toLowerCase().endsWith(type))
-        ) {
-          errors.push(
-            `${
-              file.name
-            }: Invalid file type. Allowed types: ${ALLOWED_TYPES.join(", ")}`
+    const checkPDFContent = async (file) => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = function (event) {
+          const content = new Uint8Array(event.target.result);
+          // Convert first 2KB to string for checking
+          const header = String.fromCharCode.apply(
+            null,
+            content.slice(0, 2048)
           );
-          continue;
-        }
+          // Check for common indicators of text-based PDFs
+          const hasTextMarkers =
+            header.includes("/Type /Font") ||
+            header.includes("/Subtype /Text") ||
+            header.includes("/Filter /FlateDecode");
+          resolve(hasTextMarkers);
+        };
+        reader.readAsArrayBuffer(file.slice(0, 2048)); // Read only first 2KB
+      });
+    };
 
-        if (file.size > MAX_FILE_SIZE) {
-          errors.push(`${file.name}: File size exceeds 10MB limit`);
-          continue;
-        }
+    const errors = [];
+    const validFiles = [];
 
-        if (file.name.toLowerCase().endsWith(".pdf")) {
-          try {
-            const isTextBased = await checkPDFContent(file);
-            if (!isTextBased) {
-              errors.push(
-                `${file.name}: This appears to be a scanned or image-based PDF. Please upload a text-based PDF or use an OCR tool first.`
-              );
-              continue;
-            }
-          } catch (err) {
-            console.error("PDF validation error:", err);
+    for (const file of Array.from(event.target.files)) {
+      // Check file type
+      if (
+        !ALLOWED_TYPES.some((type) => file.name.toLowerCase().endsWith(type))
+      ) {
+        errors.push(
+          `${file.name}: Invalid file type. Allowed types: ${ALLOWED_TYPES.join(
+            ", "
+          )}`
+        );
+        continue;
+      }
+
+      // Check file size
+      if (file.size > MAX_FILE_SIZE) {
+        errors.push(`${file.name}: File size exceeds 10MB limit`);
+        continue;
+      }
+
+      // Check PDF content type
+      if (file.name.toLowerCase().endsWith(".pdf")) {
+        try {
+          const isTextBased = await checkPDFContent(file);
+          if (!isTextBased) {
             errors.push(
-              `${file.name}: Error validating PDF content. Please try a different file.`
+              `${file.name}: This appears to be a scanned or image-based PDF. Please upload a text-based PDF or use an OCR tool first.`
             );
             continue;
           }
+        } catch (err) {
+          console.error("PDF validation error:", err);
+          errors.push(
+            `${file.name}: Could not validate PDF format. Please ensure it's a valid text-based PDF.`
+          );
+          continue;
         }
-
-        validFiles.push(file);
       }
 
-      if (validFiles.length > MAX_FILES) {
-        return {
-          validFiles: [],
-          errors: [`Maximum ${MAX_FILES} files can be uploaded at once`],
-        };
-      }
+      validFiles.push(file);
+    }
 
-      return { validFiles, errors };
-    },
-    [checkPDFContent]
-  );
+    if (validFiles.length > MAX_FILES) {
+      setError(`Maximum ${MAX_FILES} files can be uploaded at once`);
+      event.target.value = "";
+      return;
+    }
+
+    if (errors.length > 0) {
+      setError(errors.join("\n"));
+      event.target.value = "";
+      return;
+    }
+
+    setFiles(validFiles);
+    setError(null);
+    setStatus(`${validFiles.length} files selected`);
+  };
 
   const handleUpload = async () => {
     if (files.length === 0) {
@@ -109,20 +116,12 @@ const FileUploader = () => {
       setError(null);
       setStatus("Preparing upload...");
 
-      // Create FormData with all files
       const formData = new FormData();
-      Array.from(files).forEach((file) => {
-        if (file instanceof File) {
-          formData.append("files", file);
-        }
-      });
+      files.forEach((file) => formData.append("files", file));
 
       console.log(
-        "Sending files:",
-        Array.from(formData.getAll("files")).map((f) => ({
-          name: f.name,
-          size: f.size,
-        }))
+        "Starting upload of files:",
+        files.map((f) => ({ name: f.name, size: f.size }))
       );
 
       const response = await chatService.uploadFiles(formData, {
@@ -140,8 +139,7 @@ const FileUploader = () => {
 
       console.log("Upload response:", response);
 
-      // Check for processing errors in the response
-      if (response?.results) {
+      if (response.results) {
         const failedFiles = response.results.filter(
           (result) => result.message?.status === "error"
         );
@@ -151,9 +149,13 @@ const FileUploader = () => {
         );
 
         if (failedFiles.length > 0) {
-          const errorMessages = failedFiles.map(
-            (file) => `${file.filename}: ${file.message.message}`
-          );
+          const errorMessages = failedFiles.map((file) => {
+            const errorMsg = file.message.message;
+            if (errorMsg.includes("Cannot convert to list of floats")) {
+              return `${file.filename}: The file could not be processed. Please ensure it's a text-based PDF.`;
+            }
+            return `${file.filename}: ${errorMsg}`;
+          });
           setError(errorMessages.join("\n"));
           setStatus(
             `Upload completed. ${successFiles.length} files processed successfully, ${failedFiles.length} files had processing errors.`
@@ -170,58 +172,20 @@ const FileUploader = () => {
       }
     } catch (error) {
       console.error("Upload error:", error);
-      console.error("Error details:", {
-        name: error.name,
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-      });
-
       let errorMessage = "Upload failed";
 
       if (error.response?.data?.results) {
-        // Handle structured error response with tips for PDF errors
         const failedResults = error.response.data.results.filter(
           (r) => r.message?.status === "error"
         );
         if (failedResults.length > 0) {
-          const errors = failedResults.map((r) => {
-            const msg = r.message.message;
-            if (
-              msg.includes("Cannot convert to list of floats") ||
-              msg.includes("Could not process PDF") ||
-              msg.includes("Failed to extract text")
-            ) {
-              return {
-                file: r.filename,
-                message:
-                  "This appears to be a scanned or image-based PDF. Please upload a text-based PDF or use an OCR tool first.",
-                tips: [
-                  "Use an OCR tool to convert scanned documents to searchable PDFs",
-                  "Ensure the PDF contains actual text, not just images",
-                  "Try opening the PDF and verifying you can select/copy text",
-                ],
-              };
-            }
-            return { file: r.filename, message: msg, tips: [] };
-          });
-
-          errorMessage = errors
-            .map((err) => {
-              let msg = `${err.file}: ${err.message}`;
-              if (err.tips.length > 0) {
-                msg +=
-                  "\n\nTips:\n" + err.tips.map((tip) => `• ${tip}`).join("\n");
-              }
-              return msg;
-            })
-            .join("\n\n");
+          errorMessage = failedResults
+            .map((r) => `${r.filename}: ${r.message.message}`)
+            .join("\n");
         }
       } else if (error.response?.data?.message) {
-        // Handle direct error message
         errorMessage = error.response.data.message;
       } else if (error.message) {
-        // Handle network or other errors
         errorMessage = error.message;
       }
 
@@ -231,34 +195,6 @@ const FileUploader = () => {
       setLoading(false);
       setUploadProgress({});
       setOverallProgress(0);
-    }
-  };
-
-  const handleFileSelect = async (event) => {
-    if (!event.target.files || event.target.files.length === 0) {
-      setError("No files selected");
-      return;
-    }
-
-    setStatus("Validating files...");
-    setError(null);
-
-    try {
-      const { validFiles, errors } = await validateFiles(event.target.files);
-
-      if (errors.length > 0) {
-        setError(errors.join("\n"));
-        event.target.value = "";
-        return;
-      }
-
-      setFiles(validFiles);
-      setError(null);
-      setStatus(`${validFiles.length} files selected`);
-    } catch (err) {
-      console.error("File validation error:", err);
-      setError("Error validating files. Please try again.");
-      event.target.value = "";
     }
   };
 
@@ -377,36 +313,29 @@ const FileUploader = () => {
             <div className="flex-1">
               <div className="font-medium mb-1">File Processing Error</div>
               <div className="text-sm whitespace-pre-wrap">
-                {error.includes("Cannot convert to list of floats")
+                {error.includes("Cannot convert to list of floats") ||
+                error.includes("scanned or image-based PDF")
                   ? "The file could not be processed. Please try uploading a different PDF file, or ensure the PDF is text-based and not image-based."
-                  : error.includes("Failed to upload files")
-                  ? "Connection to server failed. Please ensure the backend server is running and try again."
                   : error}
               </div>
-              {error.includes("Cannot convert to list of floats") && (
+              {(error.includes("Cannot convert to list of floats") ||
+                error.includes("scanned or image-based PDF")) && (
                 <div className="mt-2 text-sm">
                   Tips:
                   <ul className="list-disc ml-4 mt-1">
                     <li>
-                      If you're uploading a scanned document, try using an OCR
-                      tool to convert it to a searchable PDF first.
+                      Make sure you're uploading a PDF that contains actual
+                      text, not scanned images
                     </li>
                     <li>
-                      Make sure the PDF contains actual text and not just images
-                      of text.
+                      If you have a scanned document, use an OCR tool (like
+                      Adobe Acrobat or online tools) to convert it to searchable
+                      text first
                     </li>
-                  </ul>
-                </div>
-              )}
-              {error.includes("Failed to upload files") && (
-                <div className="mt-2 text-sm">
-                  Tips:
-                  <ul className="list-disc ml-4 mt-1">
                     <li>
-                      Check if the backend server is running on
-                      http://localhost:8000
+                      Try copy-pasting text from the PDF - if you can't, it's
+                      likely image-based
                     </li>
-                    <li>Try refreshing the page and uploading again</li>
                   </ul>
                 </div>
               )}

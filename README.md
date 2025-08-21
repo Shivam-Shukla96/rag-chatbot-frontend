@@ -1,3 +1,12 @@
+<!-- commands to push the code to github -->
+
+add all files - git add .
+commit with msg - git commit -m "your_message"
+push to github - git push origin main (bramch_name)
+
+
+
+
 # AI Chatbot Frontend
 
 A modern, responsive React-based frontend for an AI chatbot application.
@@ -45,10 +54,15 @@ src/
 ### Features
 
 - Real-time query processing
-- Error handling
-- Loading states for better UX
+- Advanced error handling
+- Loading states with progress tracking
 - Responsive design
-- File upload capability
+- Batch file upload capability (up to 80 files)
+  - Individual file progress tracking
+  - Overall upload progress
+  - File validation and error handling
+  - Support for multiple file formats (.txt, .pdf, .doc, .docx)
+  - Size limit enforcement (10MB per file)
 
 ## Setup Instructions
 

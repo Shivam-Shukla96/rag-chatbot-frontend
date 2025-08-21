@@ -8,16 +8,25 @@ const QueryBox = () => {
   const [error, setError] = useState(null);
 
   const handleQuery = async () => {
-    if (!query.trim()) return;
+    if (!query.trim()) {
+      setError("Please enter a question");
+      return;
+    }
 
     try {
       setLoading(true);
       setError(null);
+      setAnswers(""); // Clear previous answers
+      console.log("Sending query:", query); // Debug log
       const response = await chatService.sendQuery(query);
-      setAnswers(response.answer);
+      console.log("Received response:", response); // Debug log
+      setAnswers(response.answer || response.data || response);
     } catch (err) {
-      setError(err.message || "Failed to get response");
-      setAnswers("");
+      console.error("Query error:", err); // Debug log
+      setError(
+        err.message ||
+          "Failed to get response. Please ensure the backend server is running."
+      );
     } finally {
       setLoading(false);
     }
