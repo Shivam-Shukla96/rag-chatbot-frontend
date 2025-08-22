@@ -25,11 +25,11 @@ export const chatService = {
         "Sending query to:",
         `${endpoints.query}?q=${encodeURIComponent(query)}`
       );
-      const response = await api.get(
+      const Response = await api.get(
         `${endpoints.query}?q=${encodeURIComponent(query)}`
       );
-      console.log("API Response:", response);
-      return response.data;
+      console.log("API Response:", Response);
+      return Response.data;
     } catch (error) {
       console.error("API Error:", error);
       if (error.response) {
@@ -63,12 +63,12 @@ export const chatService = {
         baseURL: api.defaults.baseURL,
       });
 
-      const response = await api.post(endpoints.upload, formData, {
+      const Response = await api.post(endpoints.upload, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
         validateStatus: function (status) {
-          return status < 500; // Accept all status codes less than 500
+          return status<500; // Accept all status codes less than 500
         },
         onUploadProgress: (progressEvent) => {
           const percentCompleted =
@@ -89,8 +89,7 @@ export const chatService = {
           });
         },
       });
-
-      return response.data;
+      return Response.data;
     } catch (error) {
       console.error("Upload error:", error);
 
@@ -157,10 +156,9 @@ export const chatService = {
   // Get themes analysis
   async getThemes(query) {
     try {
-      const response = await api.get(
-        `${endpoints.theme}?q=${encodeURIComponent(query)}`
-      );
-      return response.data;
+      const Response = await api.get(
+        `${endpoints.theme}?q=${encodeURIComponent(query)}`);
+      return Response.data;
     } catch (error) {
       throw new Error(
         error.response?.data?.message || "Failed to analyze themes"
