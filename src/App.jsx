@@ -38,7 +38,7 @@ function App() {
       case "chat":
         return (
           <div className="animate-fadeIn">
-            <h2 className="text-2xl font-bold text-white mb-6 flex items-center">
+            <h2 className="text-2xl font-bold text-white mb-6  flex items-center">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="h-6 w-6 mr-2"
@@ -53,7 +53,7 @@ function App() {
                   d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
                 />
               </svg>
-              Chat with Document
+              Chat with Your Documents
             </h2>
             <QueryBox />
           </div>
@@ -119,7 +119,7 @@ function App() {
                 <div className="p-8">{renderContent()}</div>
 
                 {/* Footer */}
-                <footer className="bg-gray-800/50 py-4 px-6">
+                <footer className=" pb-2 px-6"> 
                   <div className="text-center text-sm text-gray-400">
                     Powered by advanced AI technology
                   </div>

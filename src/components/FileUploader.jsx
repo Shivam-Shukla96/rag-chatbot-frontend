@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from "react";
 import { chatService } from "../services/apiConfig";
 
-const MAX_FILES = 80;
+const MAX_FILES = 100;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
 const ALLOWED_TYPES = [".txt", ".pdf", ".doc", ".docx"];
 
@@ -35,7 +35,7 @@ const FileUploader = () => {
           content.includes("/Type /Font") ||
           content.includes("/Subtype /Text") ||
           content.includes("/Filter /FlateDecode") ||
-          content.includes("/ToUnicode");
+          content.includes("/ToUnicode") ;
         resolve(hasTextMarkers);
       };
       reader.readAsBinaryString(file.slice(0, 5120)); // Read first 5KB for faster processing
@@ -65,27 +65,31 @@ const FileUploader = () => {
           continue;
         }
 
-        if (file.name.toLowerCase().endsWith(".pdf")) {
-          try {
-            const isTextBased = await checkPDFContent(file);
-            if (!isTextBased) {
-              errors.push(
-                `${file.name}: This appears to be a scanned or image-based PDF. Please upload a text-based PDF or use an OCR tool first.`
-              );
-              continue;
-            }
-          } catch (err) {
-            console.error("PDF validation error:", err);
-            errors.push(
-              `${file.name}: Error validating PDF content. Please try a different file.`
-            );
-            continue;
-          }
-        }
+        // if (file.name.toLowerCase().endsWith(".pdf")) {
+        // if (file.name.toLowerCase().endsWith(".pdf")) {
+        //   try {
+        //     const isTextBased = await checkPDFContent(file);
+        //     console.log(isTextBased, "isTextBased");
+        //     if (!isTextBased) {
+        //       errors.push(
+        //         `${file.name}: This appears to be a scanned or image-based PDF. Please upload a text-based PDF or use an OCR tool first.`
+        //       );
+        //       continue;
+        //     }
+        //   } catch (err) {
+        //     console.error("PDF validation error:", err);
+        //     errors.push(
+        //       `${file.name}: Error validating PDF content. Please try a different file.`
+        //     );
+        //     continue;
+        //   }
+        // }
 
+        // If we get here, the file passed all validation checks
         validFiles.push(file);
       }
 
+      // After checking all files, check if we have too many valid files
       if (validFiles.length > MAX_FILES) {
         return {
           validFiles: [],
@@ -99,10 +103,19 @@ const FileUploader = () => {
   );
 
   const handleUpload = async () => {
+    console.log("Starting upload... ");
     if (files.length === 0) {
       setError("Please select files first");
       return;
     }
+    
+    // Debug log - check what files we're trying to upload
+    console.log("Files to upload:", files.map(f => ({ 
+      name: f.name, 
+      type: f.type,
+      size: f.size,
+      lastModified: new Date(f.lastModified).toISOString()
+    })));
 
     try {
       setLoading(true);
@@ -235,7 +248,9 @@ const FileUploader = () => {
   };
 
   const handleFileSelect = async (event) => {
+    console.log("File selection changed");
     if (!event.target.files || event.target.files.length === 0) {
+      console.log(event?.target, "event. target ");
       setError("No files selected");
       return;
     }

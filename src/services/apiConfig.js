@@ -29,24 +29,117 @@ export const chatService = {
         `${endpoints.query}?q=${encodeURIComponent(query)}`
       );
       console.log("API Response:", Response);
-      return Response.data;
+
+      // Create a standardized response format
+      let processedResponse = { response: null };
+
+      // Handle the raw response data
+      if (Response.data === undefined || Response.data === null) {
+        // Handle null/undefined data
+        console.warn("Warning: Server returned no data");
+        processedResponse = {
+          response:
+            "No data returned from the server. Please make sure you've uploaded documents.",
+          status: "error",
+        };
+      } else if (typeof Response.data === "string") {
+        // Handle string response (simple text)
+        processedResponse = { response: Response.data };
+      } else if (typeof Response.data === "object") {
+        // Handle object responses
+        if (Object.keys(Response.data).length === 0) {
+          // Empty object response
+          console.warn("Warning: Server returned empty object");
+          processedResponse = {
+            response:
+              "No relevant information found in your documents for this query.",
+            status: "no_results",
+          };
+        } else if (Response.data.response) {
+          // The response already has the structure we want
+          processedResponse = Response.data;
+        } else if (Response.data.error || Response.data.status === "error") {
+          // Error reported in the response
+          processedResponse = {
+            response: Response.data.message || "Error from server",
+            status: "error",
+            details: Response.data,
+          };
+        } else {
+          // Unknown object structure - use as is but ensure it has a response property
+          processedResponse = {
+            response: JSON.stringify(Response.data, null, 2),
+            rawData: Response.data,
+          };
+        }
+      } else {
+        // Any other type of response
+        processedResponse = {
+          response: `Received: ${Response.data}`,
+          type: typeof Response.data,
+        };
+      }
+
+      console.log("Processed response:", processedResponse);
+      return processedResponse;
     } catch (error) {
       console.error("API Error:", error);
+
+      // Instead of throwing errors, return structured error responses
+      // This ensures the UI always gets a consistent format
+
       if (error.response) {
         console.error("Error response:", error.response);
-        throw new Error(
-          error.response.data?.message ||
-            `Server error: ${error.response.status} ${error.response.statusText}`
-        );
+
+        // Handle specific status codes
+        if (error.response.status === 404) {
+          return {
+            response:
+              "The query endpoint was not found. Check your API configuration.",
+            status: "error",
+            statusCode: 404,
+          };
+        } else if (error.response.status === 400) {
+          return {
+            response:
+              error.response.data?.message ||
+              "Invalid query. Please try a different question.",
+            status: "error",
+            statusCode: 400,
+          };
+        } else if (error.response.status === 422) {
+          return {
+            response:
+              error.response.data?.message ||
+              "The server couldn't process your query. Please try rephrasing your question.",
+            status: "error",
+            statusCode: 422,
+          };
+        } else {
+          return {
+            response:
+              error.response.data?.message ||
+              `Server error: ${error.response.status} ${error.response.statusText}`,
+            status: "error",
+            statusCode: error.response.status,
+          };
+        }
       } else if (error.request) {
         console.error("No response received");
-        throw new Error(
-          "No response from server. Please ensure the backend server is running at " +
-            (process.env.REACT_APP_API_URL || "http://localhost:8000")
-        );
+        return {
+          response:
+            "No response from server. Please ensure the backend server is running at " +
+            (process.env.REACT_APP_API_URL || "http://localhost:8000"),
+          status: "error",
+          errorType: "network",
+        };
       } else {
         console.error("Request setup error:", error.message);
-        throw new Error("Failed to send request: " + error.message);
+        return {
+          response: "Failed to send request: " + error.message,
+          status: "error",
+          errorType: "request",
+        };
       }
     }
   },
@@ -63,12 +156,13 @@ export const chatService = {
         baseURL: api.defaults.baseURL,
       });
 
-      const Response = await api.post(endpoints.upload, formData, {
+      const response = await api.post(endpoints.upload, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
         validateStatus: function (status) {
-          return status<500; // Accept all status codes less than 500
+          // Accept all status codes to handle them manually
+          return true;
         },
         onUploadProgress: (progressEvent) => {
           const percentCompleted =
@@ -89,7 +183,31 @@ export const chatService = {
           });
         },
       });
-      return Response.data;
+      // Check for error status codes
+      if (response.status >= 400) {
+        console.error(`Upload error: HTTP ${response.status}`, response.data);
+
+        if (response.status === 422) {
+          // Handle validation errors (422 Unprocessable Entity)
+          const errorMsg =
+            response.data.detail ||
+            "Server couldn't process the upload. Please check your files and try again.";
+
+          throw new Error(
+            Array.isArray(errorMsg)
+              ? errorMsg
+                  .map((err) => `${err.loc.join(".")}: ${err.msg}`)
+                  .join("\n")
+              : errorMsg
+          );
+        }
+
+        throw new Error(
+          `Upload failed with status ${response.status}: ${response.statusText}`
+        );
+      }
+
+      return response.data;
     } catch (error) {
       console.error("Upload error:", error);
 
@@ -157,7 +275,8 @@ export const chatService = {
   async getThemes(query) {
     try {
       const Response = await api.get(
-        `${endpoints.theme}?q=${encodeURIComponent(query)}`);
+        `${endpoints.theme}?q=${encodeURIComponent(query)}`
+      );
       return Response.data;
     } catch (error) {
       throw new Error(
